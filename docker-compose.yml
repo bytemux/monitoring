@@ -1,0 +1,108 @@
+version: '3'
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.10.0
+    ports:
+      - 9090:9090
+    volumes:
+      - prometheus_data:/prometheus
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - back_net
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.external-url=http://prometheus:9090/'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention=200h'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+      - '--storage.tsdb.min-block-duration=30m'
+      - '--storage.tsdb.max-block-duration=1d'
+
+  grafana:
+    image: grafana/grafana:6.2.4
+    ports:
+      - 3000:3000
+    volumes:
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${monitoring_password}
+    depends_on:
+      - prometheus
+    networks:
+      - back_net
+
+# Example exporters
+  postgres:
+    image: postgres:11.1-alpine
+    ports:
+      - 5432:5432
+    volumes:
+        - postgres_data:/var/lib/postgresql/data
+    networks:
+      - back_net
+    environment:
+      - POSTGRES_PASSWORD=${monitoring_password}
+
+  pg_exporter:
+    image: wrouesnel/postgres_exporter
+    ports:
+      - 9187:9187
+    networks:
+      - back_net
+    environment:
+      - DATA_SOURCE_NAME=postgresql://postgres:${monitoring_password}@postgres:5432/?sslmode=disable
+    restart: unless-stopped
+
+  node_exporter:
+    image: prom/node-exporter
+    ports:
+      - 9100:9100
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    networks:
+      - back_net
+    restart: unless-stopped
+
+  cadvisor:
+    image: google/cadvisor:v0.33.0
+    ports:
+    - '9200:8080'
+    volumes:
+      - '/:/rootfs:ro'
+      - '/var/run:/var/run:rw'
+      - '/sys:/sys:ro'
+      - '/var/lib/docker/:/var/lib/docker:ro'
+    networks:
+      - back_net
+    restart: unless-stopped
+
+  # alertmanager:
+  #   image: prom/alertmanager:v0.17.0
+  #   ports:
+  #     - 9093:9093
+  #   volumes:
+  #     - ./alertmanager/config.yml:/etc/alertmanager/config.yml
+  #   command:
+  #     - '--config.file=/etc/alertmanager/config.yml'
+
+networks:
+  back_net:
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  postgres_data:
+
+

@@ -1,0 +1,29 @@
+version: '3'
+
+services:
+  pg_exporter:
+    image: wrouesnel/postgres_exporter
+    ports:
+      - 9187:9187
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${postgres_exporter_user}:${postgres_exporter_password}@127.0.0.1:5432/postgres?sslmode=disable
+    restart: unless-stopped
+    network_mode: host
+    # firewall-cmd --zone=public --add-port=9187/tcp --permanent; firewall-cmd --reload
+
+  node_exporter:
+    image: prom/node-exporter
+    ports:
+      - 9100:9100
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - --collector.filesystem.ignored-mount-points
+      - "^/(sys|proc|dev|host|etc|rootfs/var/lib/docker/containers|rootfs/var/lib/docker/overlay2|rootfs/run/docker/netns|rootfs/var/lib/docker/aufs)($$|/)"
+    restart: unless-stopped
+
+
